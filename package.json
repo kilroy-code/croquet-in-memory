@@ -1,0 +1,11 @@
+{
+  "name": "croquet-in-memory",
+  "version": "1.0.0",
+  "description": "In-memory single-user version of parts of the Croquet.io API, suitable for testing & development.",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

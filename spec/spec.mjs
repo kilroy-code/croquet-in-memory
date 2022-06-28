@@ -1,6 +1,7 @@
 /*global describe, it, require*/
 
 import { Croquet } from '../index.mjs';
+import { getKey } from '../../api-key/index.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
 describe('Croquet', function () {
@@ -66,21 +67,23 @@ describe('Croquet', function () {
 	}
       }
       [MyModel].forEach(kind => kind.register(kind.name));
-      Croquet.Session.join({
-	appId: "com.ki1r0y.fake",
-	name: "x3",
-	apiKey: "1HfEipivkN9GP15g8f5lqKAhz7lls49Mi7nFnFKJg",
-	password: "secret",
-	model: MyModel,
-	view: MyView,
-	options: {options: 'options'}
-      }).then(session => {
-	record('session', session.id);
-	session.view.viewSession = session; // Real Croquet has an undocumented read-only property called session.
-	setTimeout(() =>
-	  session.view.userDoesSomething()
-	  , 1000);
-      });
+      getKey('croquet')
+	.then(apiKey => Croquet.Session.join({
+	  appId: "com.ki1r0y.fake",
+	  name: "x3",
+	  apiKey,
+	  password: "secret",
+	  model: MyModel,
+	  view: MyView,
+	  options: {options: 'options'}
+	}))
+	.then(session => {
+	  record('session', session.id);
+	  session.view.viewSession = session; // Real Croquet has an undocumented read-only property called session.
+	  setTimeout(() =>
+	    session.view.userDoesSomething()
+	    , 1000);
+	});
     });
   });
 });

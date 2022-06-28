@@ -1,3 +1,11 @@
+// TODO:
+// - Test case for future()
+// - Integrate publish with _tick.
+// - Test case for multiple sessions. (Still one user per session. Useful now just to confirm that what we have here is actually right.)
+
+// Not needed yet. (Use real Croquet.)
+// - Snapshots and multiple participants. (In the same browser. The idea here is for controlled testing! Use real Croquet for multi-browser collaboration!)
+// - Test case for multiple participants within a session
 const Constants = {};
 const App = {};
 class Model {
@@ -5,6 +13,8 @@ class Model {
   }
   static create(properties, name, session = Session._currentSession) {
     let model = new this();
+    // Each model knows what session it belongs to. For modelRoot, this is captured by the secret third argument to create.
+    // After that, we rely on the Model.create only being executed from within a Session.step(), in which Session._currentSession is set.
     model._session = session;
     if (name) model.beWellKnownAs(name);
     model.id = (Model._counter++).toString(); // Real Croquet has the same model.id for each of the "same" model for each user in the session.
@@ -57,8 +67,7 @@ class View {
   }
   constructor(model) {
     this._model = model;
-    let modelRoot = this.wellKnownModel('modelRoot'),
-	session = modelRoot._session;
+    let session = model._session;
     // These are often referenced from subclass constructors.
     this.sessionId = session.id;
     this.viewId = session._viewId;

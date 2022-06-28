@@ -6,7 +6,7 @@ croquet-in-memory is a sloppy implementation of some of the API that only suppor
 
 - Develop initial versions of applications without storage and always having a fresh session.
 
-- Test in controlled ways, in which your test case carefully arranges for one particular message to always arrive before another.
+- Test in controlled ways, in which your test case carefully arranges for one particular message to always arrive before message 2.
 
 ## Usage
 

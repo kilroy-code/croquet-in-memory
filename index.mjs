@@ -128,17 +128,17 @@ class Session {
     if (!subscription) return console.warn(`No subscription found for ${scope} ${event}.`); // Not an error!
     this._send(subscription, data);
   }
+  _receive(subscription, time, data) {
+    const message = subscription.makePendingMessage(time, data);
+    this._scheduleMessage(message, subscription.type);
+  }
   _send(subscription, data) {
-    setTimeout(() => {
-      const isModel = subscription.type === 'model',
-	    // model messages get timestamped by the router, and advance our time.
-	    // view messages are executed in the same step they are received.
-	    time = isModel ? performance.now() : this._stepMax,
-	    message = subscription.makePendingMessage(time, data);
-      this._scheduleMessage(message, subscription.type);
-    },
+    // view messages are executed in the same step they are received, so use current step's time.
+    if (subscription.type !== 'model') return this._receive(subscription, this._stepMax, data);
+    // model messages get timestamped by the router, and advance our time.
+    setTimeout(() => this._receive(subscription, performance.now(), data),
 	       // We could simulate a network delay here, e.g, with a random time.
-	       // Instead we stress things by occuring as soon as possible.
+	       // Instead we stress things by occuring as soon as the semantics allow.
 	       0);
   }
   _checkBacklog() {
@@ -159,8 +159,8 @@ class Session {
 	  };
     Session._currentSession = this; // Context for execution messages:
     executeUntil(this._pendingModelMessages, stepMax);
-    this._checkBacklog();
     executeUntil(this._pendingViewMessages, stepMax);	    
+    this._checkBacklog();
     // As of 6/22, Croquet does NOT wait for any asynchronous behavior in update. A long update does not delay requestAnimationFrame.
     if (this.view) this.view.update(frameTime);
     if (this._heartbeat) requestAnimationFrame(this.step);

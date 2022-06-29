@@ -6,6 +6,7 @@
 // - Test case for multiple participants within a session
 const Constants = {};
 const App = {};
+
 class Model {
   static register() {
   }
@@ -50,6 +51,7 @@ class Model {
   }
 }
 Model._counter = 0;
+
 class View {
   update(frameTime) {
   }
@@ -81,6 +83,7 @@ class View {
     // fixme: remove subscriptions.
   }
 }
+
 class Subscription {
   constructor(object, handler, type) {
     Object.assign(this, {object, handler, type});
@@ -89,6 +92,7 @@ class Subscription {
     return new PendingMessage(time, this.object, this.handler, [argument]);
   }
 }
+
 class PendingMessage {
   constructor(time, object, handler, args) {
     Object.assign(this, {time, object, handler, args});
@@ -98,6 +102,7 @@ class PendingMessage {
     handler.apply(object, args);
   }
 }
+
 class Session {
   _scheduleFuture(object, handler, args, deltaMS = 0) {
     this._scheduleMessage(new PendingMessage(
@@ -121,34 +126,26 @@ class Session {
   _publish(scope, event, data) {
     const subscription = this._subscriptions[scope+event];
     if (!subscription) return console.warn(`No subscription found for ${scope} ${event}.`); // Not an error!
-
-    if (subscription.type === 'model') {
-      this._send(subscription, data);
-      /*
-      setTimeout(() =>
-	//subscription.makePendingMessage(this._now, data).invoke()
-	this._scheduleMessage(subscription.makePendingMessage(this._now, data), subscription.type)
-      );
-      */
-      return;
-    }
     this._send(subscription, data);
-    /*
-    setTimeout(() =>
-      //subscription.makePendingMessage(this._now, data).invoke()
-      this._scheduleMessage(subscription.makePendingMessage(this._now, data), subscription.type)
-    );
-    */
   }
   _send(subscription, data) {
     setTimeout(() => {
       const isModel = subscription.type === 'model',
 	    // model messages get timestamped by the router, and advance our time.
-	    // view messages are executed in the same step they are issued.
-	    time = isModel ? performance.now() : this._stepMax,  // Simulated heartbeat vis performance.now(). 
+	    // view messages are executed in the same step they are received.
+	    time = isModel ? performance.now() : this._stepMax,
 	    message = subscription.makePendingMessage(time, data);
       this._scheduleMessage(message, subscription.type);
-    });
+    },
+	       // We could simulate a network delay here, e.g, with a random time.
+	       // Instead we stress things by occuring as soon as possible.
+	       0);
+  }
+  _checkBacklog() {
+    // Real Croquet can repeated fall behind and sync. Here we just do a one-shot.
+    if (this.synced || !this.view) return;
+    this.view.publish(this._viewId, 'synced', true);
+    this.synced = true;
   }
   _step(frameTime) {
     // _externalNow is increased whenever a message is received. stepMax captures the externalNow at the start of the step.
@@ -162,46 +159,39 @@ class Session {
 	  };
     Session._currentSession = this; // Context for execution messages:
     executeUntil(this._pendingModelMessages, stepMax);
+    this._checkBacklog();
     executeUntil(this._pendingViewMessages, stepMax);	    
     // As of 6/22, Croquet does NOT wait for any asynchronous behavior in update. A long update does not delay requestAnimationFrame.
     if (this.view) this.view.update(frameTime);
     if (this._heartbeat) requestAnimationFrame(this.step);
   }
+
   constructor({tps = 20}) { // fixme: use tps
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this.step = this._step.bind(this);
     this.id = "session"; // FIXME hash(properties.name + Croquet.constants + registered class sources)
+    this._viewId = "-1";
     this._subscriptions = {};
     this._models = {};
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), tps);
   }
-  static join({model, view, ...properties}) {
+  static async join({model, view, ...properties}) {
     const session = new this(properties),
-	  modelRoot = session.model = model.create(properties.options || {}, 'modelRoot', session),
-	  sessionId = session.id,
-	  viewId = session._viewId = "-1";
-
-    requestAnimationFrame(session.step);    
-    modelRoot.publish(modelRoot.sessionId, 'view-join', viewId);    
-    const viewRoot = session.view = new view(modelRoot);
-
-    return new Promise(resolve => setTimeout(() => {
-      setTimeout(() => viewRoot.publish(viewId, 'synced', true));
-      resolve(session);
-    }));
+	  modelRoot = session.model = model.create(properties.options || {}, 'modelRoot', session);
+    requestAnimationFrame(session.step);
+    modelRoot.publish(session.id, 'view-join', session._viewId);
+    session.view = new view(modelRoot);
+    return session;
   }
-  leave() { // instance method
-    const rootView = this.view;
-    return new Promise(resolve => setTimeout(() => {
-      rootView.detach();
-      clearInterval(this._heartbeat);
-      this._heartbeat = null;
-      resolve();
-      //setTimeout(() => rootView.publish(this.view.sessionId, 'view-exit', this.view.viewId));
-    }));
+  async leave() { // instance method
+    // This await is really just a yield to next tick. We're not actually waiting for the call to play out.
+    await this.view.detach();
+    this.view.publish(this.view.sessionId, 'view-exit', this.view.viewId); // We will not see it, but others might.
+    clearInterval(this._heartbeat);
+    this._heartbeat = null;
   }
 }
 export const Croquet = {Model, View, Session, Constants, App};

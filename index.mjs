@@ -1,6 +1,4 @@
 // TODO:
-// - Test case for future()
-// - Integrate publish with _tick.
 // - Test case for multiple sessions. (Still one user per session. Useful now just to confirm that what we have here is actually right.)
 
 // Not needed yet. (Use real Croquet.)
@@ -29,7 +27,7 @@ class Model {
     return this._session._models[name];
   }
   subscribe(scope, event, handler) {
-    this._session._subscribe(scope, event, handler, this);
+    this._session._subscribe(scope, event, this, handler, 'model');
   }
   publish(scope, event, data) {
     this._session._publish(scope, event, data);
@@ -37,28 +35,18 @@ class Model {
   init(properties) {
   }
   now() {
-    return this.model._session._time;
+    return this._session._now;
   }
   destroy() {
     // remove subscriptions, etc.
   }
   future(milliseconds) {
-    // e.g., this.future(50).foo(1, 2) => this._schedule(50, 'foo', 1, 2)
+    // e.g., this.future(50).foo(1, 2) => this._session._scheduleFuture(this, 'foo', [1, 2], 50)
     return new Proxy(this, {
-      get: function (target, key) {
-	return (...args) => {
-	  target._schedule(milliseconds, key, ...args);
-	};
+      get(target, key) {
+	return (...rest) => target._session._scheduleFuture(target, target[key], rest, milliseconds);
       }
     });
-  }
-  _schedule(deltaMS, name, ...args) {
-    const ticks = this._session._ticks;
-    ticks.push([
-      this.now() + deltaMS,
-      () => this[name](...args)
-    ]);
-    // fixme: sort it, too
   }
 }
 Model._counter = 0;
@@ -76,9 +64,15 @@ class View {
   wellKnownModel(name) {
     return this._model.wellKnownModel(name);
   }
+  now() {
+    return this._model._session._now;
+  }
+  externalNow() {
+    return this._model._session._externalNow;
+  }
   subscribe(scope, event, handler) {
     if (event.event) event = event.event; // For event-specs. (FIXME: support other specs)
-    this._model._session._subscribe(scope, event, handler, this);
+    this._model._session._subscribe(scope, event, this, handler, 'view');
   }
   publish(scope, event, data) {
     this._model._session._publish(scope, event, data);
@@ -87,26 +81,102 @@ class View {
     // fixme: remove subscriptions.
   }
 }
+class Subscription {
+  constructor(object, handler, type) {
+    Object.assign(this, {object, handler, type});
+  }
+  makePendingMessage(time, argument) {
+    return new PendingMessage(time, this.object, this.handler, [argument]);
+  }
+}
+class PendingMessage {
+  constructor(time, object, handler, args) {
+    Object.assign(this, {time, object, handler, args});
+  }
+  invoke() {
+    const {object, handler, args} = this;
+    handler.apply(object, args);
+  }
+}
 class Session {
-  constructor({tps = 20}) { // fixme: use tps
-    this._time = performance.now(); // FIXME: Make per-session to support multiple simultaneous sessions.
-    const ticks = this._ticks = [],
-	  step = (frameTime) => {
-	    // Context for execution messages:
-	    Session._currentSession = this;
-	    this._time = frameTime; // really message time
-	    while (ticks.length && ticks[0][0] <= frameTime) {
-	      const tick = ticks.pop();
-	      tick[1]();
+  _scheduleFuture(object, handler, args, deltaMS = 0) {
+    this._scheduleMessage(new PendingMessage(
+      this._now + deltaMS,
+      object, handler, args, 'future'
+    ));
+  }
+  _scheduleMessage(pendingMessage, type = 'model') {
+    const isModel = type !== 'view', // future messages are also model, but do not advance time.
+	  queue = isModel ? this._pendingModelMessages : this._pendingViewMessages;
+    if (type === 'model') this._externalNow = pendingMessage.time;
+    queue.push(pendingMessage);
+    queue.sort((a, b) => a.time - b.time);
+  }
+  _subscribe(scope, event, object, handler, type) {
+    // It is not clear to me if a model and view can both subscribe to the same scope/event.
+    // I _think_ that I have had trouble doing so. Best to avoid.
+    // In any case, here we assume that it is _not_ allowed.
+    this._subscriptions[scope+event] = new Subscription(object, handler, type);
+  }
+  _publish(scope, event, data) {
+    const subscription = this._subscriptions[scope+event];
+    if (!subscription) return console.warn(`No subscription found for ${scope} ${event}.`); // Not an error!
+
+    if (subscription.type === 'model') {
+      this._send(subscription, data);
+      /*
+      setTimeout(() =>
+	//subscription.makePendingMessage(this._now, data).invoke()
+	this._scheduleMessage(subscription.makePendingMessage(this._now, data), subscription.type)
+      );
+      */
+      return;
+    }
+    this._send(subscription, data);
+    /*
+    setTimeout(() =>
+      //subscription.makePendingMessage(this._now, data).invoke()
+      this._scheduleMessage(subscription.makePendingMessage(this._now, data), subscription.type)
+    );
+    */
+  }
+  _send(subscription, data) {
+    setTimeout(() => {
+      const isModel = subscription.type === 'model',
+	    // model messages get timestamped by the router, and advance our time.
+	    // view messages are executed in the same step they are issued.
+	    time = isModel ? performance.now() : this._stepMax,  // Simulated heartbeat vis performance.now(). 
+	    message = subscription.makePendingMessage(time, data);
+      this._scheduleMessage(message, subscription.type);
+    });
+  }
+  _step(frameTime) {
+    // _externalNow is increased whenever a message is received. stepMax captures the externalNow at the start of the step.
+    const stepMax = this._stepMax = this._externalNow,
+	  executeUntil = (pendingMessages, stopTime) => {
+	    while (pendingMessages.length && pendingMessages[0].time <= stopTime) {
+	      const message = pendingMessages.pop();
+	      this._now = message.time;
+	      message.invoke();
 	    }
-	    if (this.view) this.view.update(frameTime);
-	    if (this._running) requestAnimationFrame(step);
 	  };
-    this.step = step.bind(this);
+    Session._currentSession = this; // Context for execution messages:
+    executeUntil(this._pendingModelMessages, stepMax);
+    executeUntil(this._pendingViewMessages, stepMax);	    
+    // As of 6/22, Croquet does NOT wait for any asynchronous behavior in update. A long update does not delay requestAnimationFrame.
+    if (this.view) this.view.update(frameTime);
+    if (this._heartbeat) requestAnimationFrame(this.step);
+  }
+  constructor({tps = 20}) { // fixme: use tps
+    this._now = this._externalNow = this._stepMax = performance.now();
+    this._pendingModelMessages = [];
+    this._pendingViewMessages = [];
+    this.step = this._step.bind(this);
     this.id = "session"; // FIXME hash(properties.name + Croquet.constants + registered class sources)
     this._subscriptions = {};
     this._models = {};
-    this._running = true;
+    // Simulate receiving of heartbeat messages, by advancing externalNow.
+    this._heartbeat = setInterval(() => this._externalNow = performance.now(), tps);
   }
   static join({model, view, ...properties}) {
     const session = new this(properties),
@@ -127,19 +197,11 @@ class Session {
     const rootView = this.view;
     return new Promise(resolve => setTimeout(() => {
       rootView.detach();
-      resolve(this._running = false);
-      setTimeout(() => rootView.publish(this.view.sessionId, 'view-exit', this.view.viewId));
+      clearInterval(this._heartbeat);
+      this._heartbeat = null;
+      resolve();
+      //setTimeout(() => rootView.publish(this.view.sessionId, 'view-exit', this.view.viewId));
     }));
-  }
-  _subscribe(scope, event, handler, object) {
-    //console.log('fixme subscribe', scope, event);
-    this._subscriptions[scope+event] = handler.bind(object);
-  }
-  _publish(scope, event, data) {
-    const subscription = this._subscriptions[scope+event];
-    if (!subscription) return console.warn(`No subscription found for ${scope} ${event}.`); // Not an error!
-    // FIXME: schedule in messages (ticks), so that the execution occurs within step, so that multiple sessions can refer to the right Session._currentSession.
-    setTimeout(() => subscription(data));
   }
 }
 export const Croquet = {Model, View, Session, Constants, App};

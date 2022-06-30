@@ -152,13 +152,14 @@ class Session {
     const stepMax = this._stepMax = this._externalNow,
 	  executeUntil = (pendingMessages, stopTime) => {
 	    while (pendingMessages.length && pendingMessages[0].time <= stopTime) {
-	      const message = pendingMessages.pop();
+	      const message = pendingMessages.shift();
 	      this._now = message.time;
 	      message.invoke();
 	    }
 	  };
     Session._currentSession = this; // Context for execution messages:
     executeUntil(this._pendingModelMessages, stepMax);
+    this._now = stepMax;
     executeUntil(this._pendingViewMessages, stepMax);	    
     this._checkBacklog();
     // As of 6/22, Croquet does NOT wait for any asynchronous behavior in update. A long update does not delay requestAnimationFrame.

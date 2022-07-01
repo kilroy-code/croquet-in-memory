@@ -125,7 +125,7 @@ class Session {
   }
   _publish(scope, event, data) {
     const subscription = this._subscriptions[scope+event];
-    if (!subscription) return console.warn(`No subscription found for ${scope} ${event}.`); // Not an error!
+    if (!subscription) return console.info(`No subscription found for ${scope} ${event}.`); // Not an error!
     this._send(subscription, data);
   }
   _receive(subscription, time, data) {

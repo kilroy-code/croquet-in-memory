@@ -23,6 +23,7 @@ describe('Croquet', function () {
 	}
 	join(viewId) {
 	  record('join', viewId, true);
+	  this.cycles = 2; // In real Croquet, reload gives us the same model in which we wound cycles down. Reset it here.
 	  this.subscribe(viewId, 'replicated', this.replicated);
 	}
 	exit(viewId) {
@@ -79,7 +80,7 @@ describe('Croquet', function () {
       getKey('croquet')
 	.then(apiKey => Croquet.Session.join({
 	  appId: "com.ki1r0y.fake",
-	  name: "x3",
+	  name: "x4",
 	  apiKey,
 	  password: "secret",
 	  model: MyModel,

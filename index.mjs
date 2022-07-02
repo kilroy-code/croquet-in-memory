@@ -58,6 +58,7 @@ class View {
   constructor(model) {
     this._model = model;
     let session = model._session;
+    this.session = session; // Not documented, but Croquet does this.
     // These are often referenced from subclass constructors.
     this.sessionId = session.id;
     this.viewId = session._viewId;

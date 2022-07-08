@@ -10,7 +10,7 @@ const App = {};
 class Model {
   static register() {
   }
-  static create(properties, name, session = Session._currentSession) {
+  static create(properties = {}, name, session = Session._currentSession) {
     let model = new this();
     // Each model knows what session it belongs to. For modelRoot, this is captured by the secret third argument to create.
     // After that, we rely on the Model.create only being executed from within a Session.step(), in which Session._currentSession is set.
@@ -196,5 +196,5 @@ class Session {
     this._heartbeat = null;
   }
 }
-export const Croquet = {Model, View, Session, Constants, App};
+export const Croquet = {Model, View, Session, Constants, App, fake: true};
 

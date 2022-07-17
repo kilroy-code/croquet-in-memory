@@ -129,10 +129,6 @@ class Session {
     if (!subscription) return console.info(`No subscription found for ${scope} ${event}.`); // Not an error!
     this._send(subscription, data);
   }
-  _receive(subscription, time, data) {
-    const message = subscription.makePendingMessage(time, data);
-    this._scheduleMessage(message, subscription.type);
-  }
   _send(subscription, data) {
     // view messages are executed in the same step they are received, so use current step's time.
     if (subscription.type !== 'model') return this._receive(subscription, this._stepMax, data);
@@ -141,6 +137,10 @@ class Session {
 	       // We could simulate a network delay here, e.g, with a random time.
 	       // Instead we stress things by occuring as soon as the semantics allow.
 	       0);
+  }
+  _receive(subscription, time, data) {
+    const message = subscription.makePendingMessage(time, data);
+    this._scheduleMessage(message, subscription.type);
   }
   _checkBacklog() {
     // Real Croquet can repeated fall behind and sync. Here we just do a one-shot.
@@ -174,14 +174,15 @@ class Session {
     this._pendingViewMessages = [];
     this.step = this._step.bind(this);
     this.id = "session"; // FIXME hash(properties.name + Croquet.constants + registered class sources)
-    this._viewId = "-1";
+    Session.sessions.push(this);
+    this._viewId = (-Session.sessions.length).toString();
     this._subscriptions = {};
     this._models = {};
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), tps);
   }
   static async join({model, view, ...properties}) {
-    const session = new this(properties),
+    const session = Session._currentSession = new this(properties), // During the creation of models and views, the _currentSession is set.
 	  modelRoot = session.model = model.create(properties.options || {}, 'modelRoot', session);
     requestAnimationFrame(session.step);
     modelRoot.publish(session.id, 'view-join', session._viewId);
@@ -191,10 +192,12 @@ class Session {
   async leave() { // instance method
     // This await is really just a yield to next tick. We're not actually waiting for the call to play out.
     await this.view.detach();
+    Session.sessions = Session.sessions.filter(session => session !== this);
     this.view.publish(this.view.sessionId, 'view-exit', this.view.viewId); // We will not see it, but others might.
     clearInterval(this._heartbeat);
     this._heartbeat = null;
   }
 }
+Session.sessions = [];
 export const Croquet = {Model, View, Session, Constants, App, fake: true};
 

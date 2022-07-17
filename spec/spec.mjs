@@ -1,6 +1,6 @@
 /*global describe, it, require*/
 
-//import { Croquet } from '../index.mjs';
+import { Croquet } from '../index.mjs';
 import { getKey } from '../../api-key/index.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
@@ -50,6 +50,9 @@ describe('Croquet', function () {
 	synced(isRevealed) {
 	  synced = true;
 	  record('synced', isRevealed);
+	  // The timing of synced is dependent on when requestAnimationFrame hits. So purely to get repeatable order
+	  // in our recorded results, we wait for synced before simulating the user doing something.
+	  this.userDoesSomething();
 	}
 	detach() {
 	  record('detach', this.viewId);
@@ -93,9 +96,6 @@ describe('Croquet', function () {
 	.then(session => {
 	  record('session', session.id);
 	  session.view.viewSession = session; // Real Croquet has an undocumented read-only property called session.
-	  setTimeout(() =>
-	    session.view.userDoesSomething()
-	    , 1000);
 	});
     });
   });
@@ -139,7 +139,7 @@ describe('Croquet', function () {
     });
     it('delivers to all participants.', async function () {
       sessionA.view.publish(sessionA.model.id, 'm', 99);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 50)); // Allow time to propogate.
       expect(sessionA.gotViewMessage).toBeTruthy();
       expect(sessionB.gotViewMessage).toBeTruthy();
     });

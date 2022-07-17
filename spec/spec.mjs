@@ -1,15 +1,15 @@
 /*global describe, it, require*/
 
-import { Croquet } from '../index.mjs';
+//import { Croquet } from '../index.mjs';
 import { getKey } from '../../api-key/index.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
 describe('Croquet', function () {
+  let apiKey;
+  beforeAll(async function () {
+    apiKey = await getKey('croquet');
+  });
   describe('Session', function () {
-    let apiKey;
-    beforeAll(async function () {
-      apiKey = await getKey('croquet');
-    });
     it('smokes', function (done) {
       let results = [], synced = false;
       function record(message, arg, reportOnlyIfSynced) {
@@ -97,6 +97,51 @@ describe('Croquet', function () {
 	    session.view.userDoesSomething()
 	    , 1000);
 	});
+    });
+  });
+  describe('two sessions', function () {
+    let sessionA, sessionB;
+    class TwinnedModel extends Croquet.Model {
+      init(properties) {
+	super.init(properties);
+	this.subscribe(this.id, 'm', this.m);
+      }
+      m(x) {
+	this.publish(this.id, 'v', x);
+      }
+    }
+    class TwinnedView extends Croquet.View {
+      constructor(model) {
+	super(model);
+	this.subscribe(model.id, 'v', this.v);
+      }
+      v(x) {
+	this.session.gotViewMessage = true;
+      }
+    }
+    TwinnedModel.register("TwinnedModel"); // Can't be the same name browser session in real Croquet, even if they're used by different sessions.
+    beforeAll(async function () {
+      let options = {
+	appId: "com.ki1r0y.fake",
+	name: "multiple",
+	apiKey,
+	password: "secret",
+	model: TwinnedModel,
+	view: TwinnedView,
+	options: {options: 'options'}
+      };
+      sessionA = await Croquet.Session.join(options);
+      sessionB = await Croquet.Session.join(options);
+    });
+    afterAll(async function () {
+      sessionA.leave();
+      sessionB.leave();
+    });
+    it('delivers to all participants.', async function () {
+      sessionA.view.publish(sessionA.model.id, 'm', 99);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      expect(sessionA.gotViewMessage).toBeTruthy();
+      expect(sessionB.gotViewMessage).toBeTruthy();
     });
   });
 });

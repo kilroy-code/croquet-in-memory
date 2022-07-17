@@ -16,7 +16,7 @@ class Model {
     // After that, we rely on the Model.create only being executed from within a Session.step(), in which Session._currentSession is set.
     model._session = session;
     if (name) model.beWellKnownAs(name);
-    model.id = (Model._counter++).toString(); // Real Croquet has the same model.id for each of the "same" model for each user in the session.
+    model.id = (session._idCounter++).toString(); // Real Croquet has the same model.id for each of the "same" model for each user in the session.
     model.sessionId = session.id;
     model.init(properties);
     return model;
@@ -31,7 +31,7 @@ class Model {
     this._session._subscribe(scope, event, this, handler, 'model');
   }
   publish(scope, event, data) {
-    this._session._publish(scope, event, data);
+    this._session._publish(scope, event, data, 'model');
   }
   init(properties) {
   }
@@ -50,7 +50,6 @@ class Model {
     });
   }
 }
-Model._counter = 0;
 
 class View {
   update(frameTime) {
@@ -62,7 +61,7 @@ class View {
     // These are often referenced from subclass constructors.
     this.sessionId = session.id;
     this.viewId = session._viewId;
-    this.id = (Model._counter++).toString();
+    this.id = (session._idCounter++).toString();
   }
   wellKnownModel(name) {
     return this._model.wellKnownModel(name);
@@ -78,7 +77,7 @@ class View {
     this._model._session._subscribe(scope, event, this, handler, 'view');
   }
   publish(scope, event, data) {
-    this._model._session._publish(scope, event, data);
+    this._model._session._publish(scope, event, data, 'view');
   }
   detach() {
     // fixme: remove subscriptions.
@@ -124,12 +123,17 @@ class Session {
     // In any case, here we assume that it is _not_ allowed.
     this._subscriptions[scope+event] = new Subscription(object, handler, type);
   }
-  _publish(scope, event, data) {
+  _publish(scope, event, data, fromType) {
+    let subscription = this._subscriptions[scope+event];
+    if ((fromType === 'view') && (subscription?.type === 'model')) {
+      Session.sessions.forEach(session => session._send(scope, event, data));
+    } else {
+      this._send(scope, event, data);
+    }
+  }
+  _send(scope, event, data) {
     const subscription = this._subscriptions[scope+event];
     if (!subscription) return console.info(`No subscription found for ${scope} ${event}.`); // Not an error!
-    this._send(subscription, data);
-  }
-  _send(subscription, data) {
     // view messages are executed in the same step they are received, so use current step's time.
     if (subscription.type !== 'model') return this._receive(subscription, this._stepMax, data);
     // model messages get timestamped by the router, and advance our time.
@@ -178,6 +182,7 @@ class Session {
     this._viewId = (-Session.sessions.length).toString();
     this._subscriptions = {};
     this._models = {};
+    this._idCounter = 0;
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), tps);
   }

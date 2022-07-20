@@ -100,7 +100,7 @@ describe('Croquet', function () {
     });
   });
   describe('two sessions', function () {
-    let sessionA, sessionB;
+    let sessionA, sessionB, detached;
     class TwinnedModel extends Croquet.Model {
       init(properties) {
 	super.init(properties);
@@ -118,6 +118,10 @@ describe('Croquet', function () {
       v(x) {
 	this.session.gotViewMessage = true;
       }
+      detach() {
+	detached = true;
+	super.detach();
+      }
     }
     TwinnedModel.register("TwinnedModel"); // Can't be the same name browser session in real Croquet, even if they're used by different sessions.
     beforeAll(async function () {
@@ -128,10 +132,12 @@ describe('Croquet', function () {
 	password: "secret",
 	model: TwinnedModel,
 	view: TwinnedView,
+	autoSleep: 0.1,
 	options: {options: 'options'}
       };
       sessionA = await Croquet.Session.join(options);
       sessionB = await Croquet.Session.join(options);
+      detached = false;
     });
     afterAll(async function () {
       sessionA.leave();
@@ -140,6 +146,24 @@ describe('Croquet', function () {
     it('delivers to all participants.', async function () {
       sessionA.view.publish(sessionA.model.id, 'm', 99);
       await new Promise(resolve => setTimeout(resolve, 50)); // Allow time to propogate.
+      expect(sessionA.gotViewMessage).toBeTruthy();
+      expect(sessionB.gotViewMessage).toBeTruthy();
+    });
+    it('pauses and resumes.', async function () {
+      function simulateState(state) {
+	Object.defineProperty(document, 'visibilityState', {value: state, writable: true});
+	document.dispatchEvent(new Event("visibilitychange"));
+      }
+      expect(sessionA.view).toBeTruthy();
+      expect(sessionB.view).toBeTruthy();
+
+      simulateState('hidden');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      sessionB.view.publish(sessionB.model.id, 'm', 99);
+      expect(detached).toBeTruthy();
+
+      simulateState('visible');
+      await new Promise(resolve => setTimeout(resolve, 200));
       expect(sessionA.gotViewMessage).toBeTruthy();
       expect(sessionB.gotViewMessage).toBeTruthy();
     });

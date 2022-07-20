@@ -172,7 +172,7 @@ class Session {
     if (this._heartbeat) requestAnimationFrame(this.step);
   }
 
-  constructor({tps = 20}) { // fixme: use tps
+  constructor({tps = 20, autoSleep = 10}) {
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
@@ -183,26 +183,50 @@ class Session {
     this._subscriptions = {};
     this._models = {};
     this._idCounter = 0;
+    this._tps = tps;
+
+    // Each session can have its own autoSleep time.
+    if (!autoSleep) return;
+    this._autoSleep = _ => {
+      if (document.visibilityState === 'hidden') {
+	this._pendingTimeout = setTimeout(_ => {
+	  console.log('pausing...');
+	  this._pause();
+	}, autoSleep * 1000);
+      } else if (this._pendingTimeout) {
+	console.log('...resuming');
+	clearTimeout(this._pendingTimeout);
+	this._pendingTimeout = null;
+	this._resume();
+      }
+    }
+    document.addEventListener('visibilitychange', this._autoSleep);
+  }
+  _resume() {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
-    this._heartbeat = setInterval(() => this._externalNow = performance.now(), tps);
+    this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
+    requestAnimationFrame(this.step);
+    this.model.publish(this.id, 'view-join', this._viewId);
+    this.view = new this._viewType(this.model);
   }
-  static async join({model, view, ...properties}) {
-    const session = Session._currentSession = new this(properties), // During the creation of models and views, the _currentSession is set.
-	  modelRoot = session.model = model.create(properties.options || {}, 'modelRoot', session);
-    requestAnimationFrame(session.step);
-    modelRoot.publish(session.id, 'view-join', session._viewId);
-    session.view = new view(modelRoot);
-    return session;
-  }
-  async leave() { // instance method
-    // This await is really just a yield to next tick. We're not actually waiting for the call to play out.
-    await this.view.detach();
-    Session.sessions = Session.sessions.filter(session => session !== this);
+  _pause() {
+    this.view.detach();
     this.view.publish(this.view.sessionId, 'view-exit', this.view.viewId); // We will not see it, but others might.
     clearInterval(this._heartbeat);
     this._heartbeat = null;
   }
+  static async join({model, view, ...properties}) {
+    const session = Session._currentSession = new this(properties); // During the creation of models and views, the _currentSession is set.
+    session.model = model.create(properties.options || {}, 'modelRoot', session);
+    session._viewType = view;
+    session._resume();
+    return session;
+  }
+  async leave() { // instance method
+    this._pause();
+    document.removeEventListener('visibilitychange', this._autoSleep);
+    Session.sessions = Session.sessions.filter(session => session !== this);
+  }
 }
 Session.sessions = [];
 export const Croquet = {Model, View, Session, Constants, App, fake: true};
-

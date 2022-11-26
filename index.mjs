@@ -7,6 +7,19 @@
 const Constants = {};
 const App = {};
 
+// Run in browser or in NodeJS
+const perf = (typeof performance !== 'undefined') ? performance : (await import('perf_hooks')).performance ;
+import {hidableDocument} from '../hidden-tab-simulator/index.mjs';
+
+var requestAnimationFrame;
+if (!requestAnimationFrame) {
+  requestAnimationFrame = handler => {
+    let paint = _ => handler(perf.now());
+    setTimeout(paint, 16);
+  }
+}
+
+
 class Model {
   static register() {
   }
@@ -133,11 +146,11 @@ class Session {
   }
   _send(scope, event, data) {
     const subscription = this._subscriptions[scope+event];
-    if (!subscription) return console.info(`No subscription found for ${scope} ${event}.`); // Not an error!
+    if (!subscription) return ;//fixme restore: console.info(`No subscription found for ${scope} ${event}.`); // Not an error!
     // view messages are executed in the same step they are received, so use current step's time.
     if (subscription.type !== 'model') return this._receive(subscription, this._stepMax, data);
     // model messages get timestamped by the router, and advance our time.
-    setTimeout(() => this._receive(subscription, performance.now(), data),
+    setTimeout(() => this._receive(subscription, perf.now(), data),
 	       // We could simulate a network delay here, e.g, with a random time.
 	       // Instead we stress things by occuring as soon as the semantics allow.
 	       0);
@@ -173,7 +186,7 @@ class Session {
   }
 
   constructor({tps = 20, autoSleep = 10}) {
-    this._now = this._externalNow = this._stepMax = performance.now();
+    this._now = this._externalNow = this._stepMax = perf.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this.step = this._step.bind(this);
@@ -188,7 +201,7 @@ class Session {
     // Each session can have its own autoSleep time.
     if (!autoSleep) return;
     this._autoSleep = _ => {
-      if (document.visibilityState === 'hidden') {
+      if (hidableDocument.visibilityState === 'hidden') {
 	this._pendingTimeout = setTimeout(_ => {
 	  console.log('pausing...');
 	  this._pause();
@@ -200,11 +213,11 @@ class Session {
 	this._resume();
       }
     }
-    document.addEventListener('visibilitychange', this._autoSleep);
+    hidableDocument.addEventListener('visibilitychange', this._autoSleep);
   }
   _resume() {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
-    this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
+    this._heartbeat = setInterval(() => this._externalNow = perf.now(), 1000 / this._tps);
     requestAnimationFrame(this.step);
     this.model.publish(this.id, 'view-join', this._viewId);
     this.view = new this._viewType(this.model);
@@ -224,7 +237,7 @@ class Session {
   }
   async leave() { // instance method
     this._pause();
-    document.removeEventListener('visibilitychange', this._autoSleep);
+    hidableDocument.removeEventListener('visibilitychange', this._autoSleep);
     Session.sessions = Session.sessions.filter(session => session !== this);
   }
 }

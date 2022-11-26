@@ -1,6 +1,11 @@
 /*global describe, it, require*/
 
 import { Croquet } from '../index.mjs';
+// Or alternatively, we can test our tests by running them with real Croquet (in a browser only) and a key. Assuming that
+// the HTML has <script src="https://unpkg.com/@croquet/croquet"></script> or some such.
+//const Croquet = window.Croquet;
+
+import { simulateVisibility } from '../../hidden-tab-simulator/index.mjs';
 import { getKey } from '../../api-key/index.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
@@ -13,7 +18,6 @@ describe('Croquet', function () {
     it('smokes', function (done) {
       let results = [], synced = false;
       function record(message, arg, reportOnlyIfSynced) {
-	//console.log(message, arg);
 	if (reportOnlyIfSynced && !synced) return;
 	results.push([message, arg]);
       }
@@ -85,14 +89,14 @@ describe('Croquet', function () {
       }
       [MyModel].forEach(kind => kind.register(kind.name));
       Croquet.Session.join({
-	  appId: "com.ki1r0y.fake",
-	  name: "x4",
-	  apiKey,
-	  password: "secret",
-	  model: MyModel,
-	  view: MyView,
-	  options: {options: 'options'}
-	})
+	appId: "com.ki1r0y.fake",
+	name: Math.random().toString(),
+	apiKey,
+	password: "secret",
+	model: MyModel,
+	view: MyView,
+	options: {options: 'options'}
+      })
 	.then(session => {
 	  record('session', session.id);
 	  session.view.viewSession = session; // Real Croquet has an undocumented read-only property called session.
@@ -119,20 +123,21 @@ describe('Croquet', function () {
 	this.session.gotViewMessage = true;
       }
       detach() {
-	detached = true;
 	super.detach();
+	detached = true;
       }
     }
     TwinnedModel.register("TwinnedModel"); // Can't be the same name browser session in real Croquet, even if they're used by different sessions.
     beforeAll(async function () {
       let options = {
 	appId: "com.ki1r0y.fake",
-	name: "multiple",
+	name: Math.random().toString(),
 	apiKey,
 	password: "secret",
 	model: TwinnedModel,
 	view: TwinnedView,
 	autoSleep: 0.1,
+	rejoinLimit: 0.1,
 	options: {options: 'options'}
       };
       sessionA = await Croquet.Session.join(options);
@@ -150,20 +155,14 @@ describe('Croquet', function () {
       expect(sessionB.gotViewMessage).toBeTruthy();
     });
     it('pauses and resumes.', async function () {
-      function simulateState(state) {
-	Object.defineProperty(document, 'visibilityState', {value: state, writable: true});
-	document.dispatchEvent(new Event("visibilitychange"));
-      }
       expect(sessionA.view).toBeTruthy();
       expect(sessionB.view).toBeTruthy();
 
-      simulateState('hidden');
-      await new Promise(resolve => setTimeout(resolve, 200));
       sessionB.view.publish(sessionB.model.id, 'm', 99);
+      await simulateVisibility('hidden');           
       expect(detached).toBeTruthy();
 
-      simulateState('visible');
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await simulateVisibility('visible');
       expect(sessionA.gotViewMessage).toBeTruthy();
       expect(sessionB.gotViewMessage).toBeTruthy();
     });

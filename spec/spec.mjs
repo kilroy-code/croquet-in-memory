@@ -7,6 +7,7 @@ import { Croquet } from '../index.mjs';
 
 import { simulateVisibility } from '../../hidden-tab-simulator/index.mjs';
 import { getKey } from '../../api-key/index.mjs';
+import { delay } from '../../utilities/delay.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
 describe('Croquet', function () {
@@ -128,6 +129,7 @@ describe('Croquet', function () {
       }
     }
     TwinnedModel.register("TwinnedModel"); // Can't be the same name browser session in real Croquet, even if they're used by different sessions.
+    let autoSleep = 0.1; // In seconds. The requestAnimationFrame period is the lower effective bound.
     beforeAll(async function () {
       let options = {
 	appId: "com.ki1r0y.fake",
@@ -136,7 +138,7 @@ describe('Croquet', function () {
 	password: "secret",
 	model: TwinnedModel,
 	view: TwinnedView,
-	autoSleep: 0.1,
+	autoSleep,
 	rejoinLimit: 0.1,
 	options: {options: 'options'}
       };
@@ -150,7 +152,7 @@ describe('Croquet', function () {
     });
     it('delivers to all participants.', async function () {
       sessionA.view.publish(sessionA.model.id, 'm', 99);
-      await new Promise(resolve => setTimeout(resolve, 50)); // Allow time to propogate.
+      await delay() // Allow time to propogate.
       expect(sessionA.gotViewMessage).toBeTruthy();
       expect(sessionB.gotViewMessage).toBeTruthy();
     });
@@ -159,7 +161,8 @@ describe('Croquet', function () {
       expect(sessionB.view).toBeTruthy();
 
       sessionB.view.publish(sessionB.model.id, 'm', 99);
-      await simulateVisibility('hidden');           
+      await simulateVisibility('hidden');
+      await delay(autoSleep * 1000);
       expect(detached).toBeTruthy();
 
       await simulateVisibility('visible');

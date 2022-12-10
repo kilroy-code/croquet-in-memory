@@ -224,6 +224,7 @@ class Session {
   }
   _pause() {
     this.view.detach();
+    this.view.session = null; // Because that's what Croquet does.
     this.view.publish(this.view.sessionId, 'view-exit', this.view.viewId); // We will not see it, but others might.
     clearInterval(this._heartbeat);
     this._heartbeat = null;

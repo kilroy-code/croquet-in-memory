@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "jasmine": "^3.5.0",
-    "@kilroy-code/api-key": "^0.0.1"
+    "@kilroy-code/api-key": "^0.0.1",
+    "@kilroy-code/utilities": "^1.0.3"
   }
 }

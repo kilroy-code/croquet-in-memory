@@ -7,14 +7,13 @@
 const Constants = {};
 const App = {};
 
-// Run in browser or in NodeJS
-const perf = (typeof performance !== 'undefined') ? performance : (await import('perf_hooks')).performance ;
-import {hidableDocument} from '../hidden-tab-simulator/index.mjs';
+import { performance } from '@kilroy-code/utilities/performance.mjs';
+import {hidableDocument} from '@kilroy-code/hidden-tab-simulator/index.mjs';
 
 var requestAnimationFrame;
 if (!requestAnimationFrame) {
   requestAnimationFrame = handler => {
-    let paint = _ => handler(perf.now());
+    let paint = _ => handler(performance.now());
     setTimeout(paint, 16);
   }
 }
@@ -150,7 +149,7 @@ class Session {
     // view messages are executed in the same step they are received, so use current step's time.
     if (subscription.type !== 'model') return this._receive(subscription, this._stepMax, data);
     // model messages get timestamped by the router, and advance our time.
-    setTimeout(() => this._receive(subscription, perf.now(), data),
+    setTimeout(() => this._receive(subscription, performance.now(), data),
 	       // We could simulate a network delay here, e.g, with a random time.
 	       // Instead we stress things by occuring as soon as the semantics allow.
 	       0);
@@ -186,7 +185,7 @@ class Session {
   }
 
   constructor({tps = 20, autoSleep = 10}) {
-    this._now = this._externalNow = this._stepMax = perf.now();
+    this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this.step = this._step.bind(this);
@@ -217,7 +216,7 @@ class Session {
   }
   _resume() {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
-    this._heartbeat = setInterval(() => this._externalNow = perf.now(), 1000 / this._tps);
+    this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
     requestAnimationFrame(this.step);
     this.model.publish(this.id, 'view-join', this._viewId);
     this.view = new this._viewType(this.model);

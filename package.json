@@ -1,6 +1,6 @@
 {
   "name": "@kilroy-code/croquet-in-memory",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "In-memory single-user version of parts of the Croquet.io API, suitable for testing & some development.",
   "keywords": [ "croquet", "testing", "browser", "nodejs" ],
   "main": "index.mjs",
@@ -21,14 +21,14 @@
     "url": "https://github.com/kilroy-code/croquet-in-memory/issues"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/kilroy-code"
+    "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "@kilroy-code/hidden-tab-simulator": "^0.0.1"
+    "@kilroy-code/hidden-tab-simulator": "^0.0.3",
+    "@kilroy-code/utilities": "^1.0.4"
   },
   "devDependencies": {
-    "jasmine": "^3.5.0",
-    "@kilroy-code/api-key": "^0.0.1",
-    "@kilroy-code/utilities": "^1.0.3"
+    "jasmine": "^4.5.0",
+    "@kilroy-code/api-key": "^0.0.1"
   }
 }

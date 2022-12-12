@@ -1,13 +1,13 @@
 /*global describe, it, require*/
 
+import { simulateVisibility } from '@kilroy-code/hidden-tab-simulator/index.mjs';
+import { getKey } from '@kilroy-code/api-key/index.mjs';
+import { delay } from '@kilroy-code/utilities/delay.mjs';
 import { Croquet } from '../index.mjs';
 // Or alternatively, we can test our tests by running them with real Croquet (in a browser only) and a key. Assuming that
 // the HTML has <script src="https://unpkg.com/@croquet/croquet"></script> or some such.
 //const Croquet = window.Croquet;
 
-import { simulateVisibility } from '../../hidden-tab-simulator/index.mjs';
-import { getKey } from '../../api-key/index.mjs';
-import { delay } from '../../utilities/delay.mjs';
 
 Croquet.App.root = false; // Disable the default Croquet overlay so we can see Jasmine report from start to finish.
 describe('Croquet', function () {

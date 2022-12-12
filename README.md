@@ -1,4 +1,4 @@
-# croquet-in-memory
+# croquet-in-memory [![npm test](https://github.com/kilroy-code/croquet-in-memory/actions/workflows/npm-test.yml/badge.svg)](https://github.com/kilroy-code/croquet-in-memory/actions/workflows/npm-test.yml)
 
 [Croquet OS](https://croquet.io/croquet-os/index.html) is a distributed, multi-user protocol for the Web. 
 

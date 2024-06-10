@@ -33,6 +33,9 @@ class Model {
     model.init(properties);
     return model;
   }
+  get viewCount() {
+    return this._session._viewCount;
+  }
   beWellKnownAs(name) {
     this._session._models[name] = this;
   }
@@ -196,6 +199,7 @@ class Session {
     this._models = {};
     this._idCounter = 0;
     this._tps = tps;
+    this._viewCount = 0;
 
     // Each session can have its own autoSleep time.
     if (!autoSleep) return;
@@ -218,13 +222,15 @@ class Session {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
     requestAnimationFrame(this.step);
+    this._viewCount++;
     this.model.publish(this.id, 'view-join', this._viewId);
     this.view = new this._viewType(this.model);
   }
   _pause() {
     this.view.detach();
     this.view.session = null; // Because that's what Croquet does.
-    this.view.publish(this.view.sessionId, 'view-exit', this.view.viewId); // We will not see it, but others might.
+    this._viewCount--;
+    this.model.publish(this.id, 'view-exit', this._viewId); // We will not see it, but others might.
     clearInterval(this._heartbeat);
     this._heartbeat = null;
   }

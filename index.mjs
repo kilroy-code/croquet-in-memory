@@ -132,6 +132,7 @@ class Session {
     queue.push(pendingMessage);
     queue.sort((a, b) => a.time - b.time);
   }
+  // FIXME: support having a list of  multiple subscriptions for the same scope+event.
   _subscribe(scope, event, object, handler, type) {
     // It is not clear to me if a model and view can both subscribe to the same scope/event.
     // I _think_ that I have had trouble doing so. Best to avoid.
@@ -139,6 +140,12 @@ class Session {
     this._subscriptions[scope+event] = new Subscription(object, handler, type);
   }
   _publish(scope, event, data, fromType) {
+    if (['view-join', 'view-exit'].includes(event)) {
+      let increment = event === 'view-join' ? 1 : -1,
+          count = this._viewCount + increment;
+      // FIXME: delay this until just before the message is received (even without subscription).
+      Session.sessions.forEach(session => session._viewCount = count);
+    }
     let subscription = this._subscriptions[scope+event];
     if ((fromType === 'view') && (subscription?.type === 'model')) {
       Session.sessions.forEach(session => session._send(scope, event, data));
@@ -187,19 +194,20 @@ class Session {
     if (this._heartbeat) requestAnimationFrame(this.step);
   }
 
-  constructor({tps = 20, autoSleep = 10}) {
+  constructor({tps = 20, autoSleep = 10, id}) {
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this.step = this._step.bind(this);
-    this.id = "session"; // FIXME hash(properties.name + Croquet.constants + registered class sources)
+    this.id = id;
     Session.sessions.push(this);
     this._viewId = (-Session.sessions.length).toString();
     this._subscriptions = {};
     this._models = {};
     this._idCounter = 0;
     this._tps = tps;
-    this._viewCount = 0;
+    let matchingSession = Session.sessions.find(session => session.id === id)
+    this._viewCount = matchingSession?._viewCount || 0;
 
     // Each session can have its own autoSleep time.
     if (!autoSleep) return;
@@ -222,21 +230,31 @@ class Session {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
     requestAnimationFrame(this.step);
-    this._viewCount++;
+    Session._currentSession = this;
     this.model.publish(this.id, 'view-join', this._viewId);
     this.view = new this._viewType(this.model);
   }
   _pause() {
+    Session._currentSession = this;
     this.view.detach();
     this.view.session = null; // Because that's what Croquet does.
-    this._viewCount--;
     this.model.publish(this.id, 'view-exit', this._viewId); // We will not see it, but others might.
     clearInterval(this._heartbeat);
     this._heartbeat = null;
   }
-  static async join({model, view, ...properties}) {
-    const session = Session._currentSession = new this(properties); // During the creation of models and views, the _currentSession is set.
-    session.model = model.create(properties.options || {}, 'modelRoot', session);
+  static async join(properties) {
+    const {model, view, name = "session", options = {}, ...otherProperties} = properties,
+          id = JSON.stringify(properties), // TODO: hash of that
+          session = Session._currentSession = new this({id, ...otherProperties}), // During the creation of models and views, the _currentSession is set.
+          existing = Session.sessions.find(session => session.id === id),
+          modelProperties = existing?.model ? {} : options;
+    if (existing?.model) { // Object.assign -- except for internal stuff. In real Croquet, this would come from the snapshot.
+      // In the toy implementation here, we copy all the property values that have property names that do not begin with underscore,
+      // as those are set by create(). Note that this means that any property values in this root model node that are objects will be shared
+      // between sessions, even though the session and root model object are not.
+      Object.keys(existing.model).forEach(key => { if (!key.startsWith('_')) modelProperties[key] = existing.model[key];});
+    }
+    session.model = model.create(modelProperties, 'modelRoot', session);
     session._viewType = view;
     session._resume();
     return session;

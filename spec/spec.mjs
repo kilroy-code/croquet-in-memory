@@ -147,14 +147,25 @@ describe('Croquet', function () {
       detached = false;
     });
     afterAll(async function () {
-      sessionA.leave();
-      sessionB.leave();
+      await sessionA.leave();
+      expect(sessionB.model.viewCount).toBe(1);
+      await sessionB.leave();
+    });
+    beforeEach(function () {
+      sessionA.gotViewMessage = sessionB.gotViewMessage = false;
     });
     it('delivers to all participants.', async function () {
       sessionA.view.publish(sessionA.model.id, 'm', 99);
-      await delay() // Allow time to propogate.
+      await delay(30) // Allow time to propogate.
       expect(sessionA.gotViewMessage).toBeTruthy();
       expect(sessionB.gotViewMessage).toBeTruthy();
+    });
+    it('counts views.', function () {
+      expect(sessionA.model.viewCount).toBe(2);
+      expect(sessionB.model.viewCount).toBe(2);
+    });
+    it('viewId is different in different instances of the same session.', function () {
+      expect(sessionA.view.viewId).not.toBe(sessionB.view.viewId);
     });
     it('pauses and resumes.', async function () {
       expect(sessionA.view).toBeTruthy();

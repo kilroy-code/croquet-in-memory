@@ -194,10 +194,11 @@ class Session {
     if (this._heartbeat) requestAnimationFrame(this.step);
   }
 
-  constructor({tps = 20, autoSleep = 10, id}) {
+  constructor({tps = 20, autoSleep = 10, id, viewOptions = {}}) {
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
+    this._viewOptions = viewOptions;
     this.step = this._step.bind(this);
     this.id = id;
     Session.sessions.push(this);
@@ -232,7 +233,7 @@ class Session {
     requestAnimationFrame(this.step);
     Session._currentSession = this;
     this.model.publish(this.id, 'view-join', this._viewId);
-    this.view = new this._viewType(this.model);
+    this.view = new this._viewType(this.model, this._viewOptions);
   }
   _pause() {
     Session._currentSession = this;

@@ -17,7 +17,10 @@ croquet-in-memory is a sloppy implementation of some of the API that only suppor
 ## Usage
 
 ```
-import { Croquet } from './@kilroy-code/croquet-in-memory/index.mjs';
+// First setup your npm to pull @kilroy-code from github: https://github.com/kilroy-code/
+// Then npm install @kilroy-code/croquet-in-memory
+
+import { Croquet } from '@kilroy-code/croquet-in-memory/index.mjs';
 
 Croquet.fake; // => true, while of course, this is falsy in real Croquet.
 ```

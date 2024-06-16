@@ -1,6 +1,6 @@
 {
   "name": "@kilroy-code/croquet-in-memory",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "In-memory single-user version of parts of the Croquet.io API, suitable for testing & some development.",
   "keywords": [ "croquet", "testing", "browser", "nodejs" ],
   "main": "index.mjs",

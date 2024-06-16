@@ -19,20 +19,58 @@ if (!requestAnimationFrame) {
   }
 }
 
+// FIXME: Very hacky and incomplete.
+function replacer(key, value) { // We could incorporate subscriptions here....
+  if (!key) return value;
+  if (value instanceof Set) return {hacktype: 'Set', entries: Array.from(value.values())};
+  if (value instanceof Map) return {hacktype: 'Map', entries: Array.from(value.entries())};
+  return value;
+}
+function reviver(key, value) {
+  switch (value?.hacktype) {
+  case 'Set':
+    return new Set(value.entries);
+  case 'Map':
+    return new Map(value.entries);
+  default:
+    return value;
+  }
+}
+
 
 class Model {
   static register() {
   }
   static create(properties = {}, name, session = Session._currentSession) {
     let model = new this();
-    // Each model knows what session it belongs to. For modelRoot, this is captured by the secret third argument to create.
-    // After that, we rely on the Model.create only being executed from within a Session.step(), in which Session._currentSession is set.
-    model._session = session;
+    model._init(session);
     if (name) model.beWellKnownAs(name);
-    model.id = (session._idCounter++).toString(); // Real Croquet has the same model.id for each of the "same" model for each user in the session.
-//    model.sessionId = session.id;
+    model.id = (session._idCounter++).toString();
     model.init(properties);
     return model;
+  }
+  init(properties) {
+  }
+  _init(session) {
+    // Each model knows what session it belongs to. For modelRoot, this is captured by the secret third argument to create.
+    // After that, we rely on the Model.create only being executed from within a Session.step(), in which Session._currentSession is set.
+    this._session = session;
+    this._subscriptions = [];
+  }
+  static fromModel(model, session) {
+    let copy = new model.constructor(),
+        modelSession = model._session,
+        modelSubscriptions = model._subscriptions,
+        subscriptions = model._subscriptions;
+    // TODO: needs a real snapshot to work on trees of Models.
+    model._session = model._subscriptions = null;
+    Object.assign(copy, JSON.parse(JSON.stringify(model, replacer), reviver)); // Including id
+    model._session = modelSession;
+    model._subscriptions = modelSubscriptions;
+
+    copy._init(session);
+    subscriptions.forEach(({scope, event, handler}) => copy.subscribe(scope, event, handler));
+    return copy
   }
   get sessionId() {
     return this._session.id;
@@ -47,12 +85,11 @@ class Model {
     return this._session._models[name];
   }
   subscribe(scope, event, handler) {
+    this._subscriptions.push({scope, event, handler});
     this._session._subscribe(scope, event, this, handler, 'model');
   }
   publish(scope, event, data) {
     this._session._publish(scope, event, data, 'model');
-  }
-  init(properties) {
   }
   now() {
     return this._session._now;
@@ -253,15 +290,8 @@ class Session {
     const {model, view, appId, name = "session", options = {}, ...otherProperties} = properties,
           id = createHash('sha256').update(appId).update(name).update(JSON.stringify(properties)).digest('base64'), // include version
           existing = Session.sessions.find(session => session.id === id),
-          session = Session._currentSession = new this({id, name, ...otherProperties}), // During the creation of models and views, the _currentSession is set.
-          modelProperties = existing?.model ? {} : options;
-    if (existing?.model) { // Object.assign -- except for internal stuff. In real Croquet, this would come from the snapshot.
-      // In the toy implementation here, we copy all the property values that have property names that do not begin with underscore,
-      // as those are set by create(). Note that this means that any property values in this root model node that are objects will be shared
-      // between sessions, even though the session and root model object are not.
-      Object.keys(existing.model).forEach(key => { if (!key.startsWith('_')) modelProperties[key] = existing.model[key];});
-    }
-    session.model = model.create(modelProperties, 'modelRoot', session);
+          session = Session._currentSession = new this({id, name, ...otherProperties}); // During the creation of models and views, the _currentSession is set.
+    session.model = existing ? Model.fromModel(existing.model, session) : model.create(options, 'modelRoot', session);
     session._viewType = view;
     session._resume();
     return session;

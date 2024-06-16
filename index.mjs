@@ -9,6 +9,7 @@ const App = {};
 
 import { performance } from '@kilroy-code/utilities/performance.mjs';
 import {hidableDocument} from '@kilroy-code/hidden-tab-simulator/index.mjs';
+const { createHash } = await import('node:crypto');
 
 var requestAnimationFrame;
 if (!requestAnimationFrame) {
@@ -29,9 +30,12 @@ class Model {
     model._session = session;
     if (name) model.beWellKnownAs(name);
     model.id = (session._idCounter++).toString(); // Real Croquet has the same model.id for each of the "same" model for each user in the session.
-    model.sessionId = session.id;
+//    model.sessionId = session.id;
     model.init(properties);
     return model;
+  }
+  get sessionId() {
+    return this._session.id;
   }
   get viewCount() {
     return this._session._viewCount;
@@ -82,17 +86,17 @@ class View {
     return this._model.wellKnownModel(name);
   }
   now() {
-    return this._model._session._now;
+    return this.session._now;
   }
   externalNow() {
-    return this._model._session._externalNow;
+    return this.session._externalNow;
   }
   subscribe(scope, event, handler) {
     if (event.event) event = event.event; // For event-specs. (FIXME: support other specs)
-    this._model._session._subscribe(scope, event, this, handler, 'view');
+    this.session._subscribe(scope, event, this, handler, 'view');
   }
   publish(scope, event, data) {
-    this._model._session._publish(scope, event, data, 'view');
+    this.session._publish(scope, event, data, 'view');
   }
   detach() {
     // fixme: remove subscriptions.
@@ -194,15 +198,17 @@ class Session {
     if (this._heartbeat) requestAnimationFrame(this.step);
   }
 
-  constructor({tps = 20, autoSleep = 10, id, viewOptions = {}}) {
+  static viewCounter = 1;
+  constructor({tps = 20, autoSleep = 10, id, name, viewOptions = {}}) {
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this._viewOptions = viewOptions;
     this.step = this._step.bind(this);
     this.id = id;
+    this.name = name;
     Session.sessions.push(this);
-    this._viewId = (-Session.sessions.length).toString();
+    this._viewId = (-Session.viewCounter++).toString();
     this._subscriptions = {};
     this._models = {};
     this._idCounter = 0;
@@ -244,10 +250,10 @@ class Session {
     this._heartbeat = null;
   }
   static async join(properties) {
-    const {model, view, name = "session", options = {}, ...otherProperties} = properties,
-          id = JSON.stringify(properties), // TODO: hash of that
-          session = Session._currentSession = new this({id, ...otherProperties}), // During the creation of models and views, the _currentSession is set.
+    const {model, view, appId, name = "session", options = {}, ...otherProperties} = properties,
+          id = createHash('sha256').update(appId).update(name).update(JSON.stringify(properties)).digest('base64'), // include version
           existing = Session.sessions.find(session => session.id === id),
+          session = Session._currentSession = new this({id, name, ...otherProperties}), // During the creation of models and views, the _currentSession is set.
           modelProperties = existing?.model ? {} : options;
     if (existing?.model) { // Object.assign -- except for internal stuff. In real Croquet, this would come from the snapshot.
       // In the toy implementation here, we copy all the property values that have property names that do not begin with underscore,

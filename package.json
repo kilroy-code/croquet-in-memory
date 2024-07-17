@@ -1,8 +1,13 @@
 {
   "name": "@kilroy-code/croquet-in-memory",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "In-memory single-user version of parts of the Croquet.io API, suitable for testing & some development.",
-  "keywords": [ "croquet", "testing", "browser", "nodejs" ],
+  "keywords": [
+    "croquet",
+    "testing",
+    "browser",
+    "nodejs"
+  ],
   "main": "index.mjs",
   "scripts": {
     "test": "jasmine"
@@ -28,7 +33,8 @@
     "@kilroy-code/utilities": "^1.0.4"
   },
   "devDependencies": {
-    "jasmine": "^4.5.0",
-    "@kilroy-code/api-keys": "^0.0.2"
+    "@croquet/croquet": "^1.1.0",
+    "@kilroy-code/api-keys": "^0.0.2",
+    "jasmine": "^4.5.0"
   }
 }

@@ -232,15 +232,15 @@ class Session {
     this._checkBacklog();
     // As of 6/22, Croquet does NOT wait for any asynchronous behavior in update. A long update does not delay requestAnimationFrame.
     if (this.view) this.view.update(frameTime);
-    if (this._heartbeat) requestAnimationFrame(this.step);
   }
 
   static viewCounter = 1;
-  constructor({tps = 20, autoSleep = 10, id, name, viewOptions = {}}) {
+  constructor({tps = 20, autoSleep = 10, id, name, step = "auto", viewOptions = {}}) {
     this._now = this._externalNow = this._stepMax = performance.now();
     this._pendingModelMessages = [];
     this._pendingViewMessages = [];
     this._viewOptions = viewOptions;
+    this._isAutostep = step !== "manual";
     this.step = this._step.bind(this);
     this.id = id;
     this.name = name;
@@ -273,7 +273,13 @@ class Session {
   _resume() {
     // Simulate receiving of heartbeat messages, by advancing externalNow.
     this._heartbeat = setInterval(() => this._externalNow = performance.now(), 1000 / this._tps);
-    requestAnimationFrame(this.step);
+    if (this._isAutostep) {
+      const step = time => {
+        this.step(time);
+        if (this._heartbeat) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
     Session._currentSession = this;
     this.model.publish(this.id, 'view-join', this._viewId);
     this.view = new this._viewType(this.model, this._viewOptions);

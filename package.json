@@ -30,11 +30,11 @@
   },
   "dependencies": {
     "@kilroy-code/hidden-tab-simulator": "^0.0.3",
-    "@kilroy-code/utilities": "^1.0.4"
+    "@kilroy-code/utilities": "^1.0.8"
   },
   "devDependencies": {
     "@croquet/croquet": "^1.1.0",
     "@kilroy-code/api-keys": "^0.0.2",
-    "jasmine": "^4.5.0"
+    "jasmine": "^5.3.1"
   }
 }

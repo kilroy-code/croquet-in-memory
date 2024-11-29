@@ -9,14 +9,25 @@ const App = {};
 
 import { performance } from '@kilroy-code/utilities/performance.mjs';
 import {hidableDocument} from '@kilroy-code/hidden-tab-simulator/index.mjs';
-const { createHash } = await import('node:crypto');
+var hash;
+if (typeof(window) === 'undefined') {
+  let {createHash} = await import('node:crypto');
+  hash = async object => createHash('sha256').update(JSON.stringify(object)).digest('base64');
+} else {
+  hash = async object => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(JSON.stringify(object));
+    let byteArray = await window.crypto.subtle.digest("SHA-256", data);
+    return btoa(byteArray);
+  };
+}
 
 var requestAnimationFrame;
 if (!requestAnimationFrame) {
   requestAnimationFrame = handler => {
     let paint = _ => handler(performance.now());
     setTimeout(paint, 16);
-  }
+  };
 }
 
 // FIXME: Very hacky and incomplete.
@@ -267,7 +278,7 @@ class Session {
 	this._pendingTimeout = null;
 	this._resume();
       }
-    }
+    };
     hidableDocument.addEventListener('visibilitychange', this._autoSleep);
   }
   _resume() {
@@ -277,7 +288,7 @@ class Session {
       const step = time => {
         this.step(time);
         if (this._heartbeat) requestAnimationFrame(step);
-      }
+      };
       requestAnimationFrame(step);
     }
     Session._currentSession = this;
@@ -294,7 +305,7 @@ class Session {
   }
   static async join(properties) {
     const {model, view, appId, name = "session", options = {}, ...otherProperties} = properties,
-          id = createHash('sha256').update(appId).update(name).update(JSON.stringify(properties)).digest('base64'), // include version
+          id = await hash({appId, name, otherProperties}), // include version
           existing = Session.sessions.find(session => session.id === id),
           session = Session._currentSession = new this({id, name, ...otherProperties}); // During the creation of models and views, the _currentSession is set.
     session.model = existing ? Model.fromModel(existing.model, session) : model.create(options, 'modelRoot', session);
